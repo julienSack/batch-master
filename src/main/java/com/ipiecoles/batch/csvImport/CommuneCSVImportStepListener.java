@@ -12,12 +12,15 @@ public class CommuneCSVImportStepListener implements StepExecutionListener {
 
     @Override
     public void beforeStep(StepExecution stepExecution) {
-        logger.info("Before Step CSV Import");
+        //Avant l'exécution de la Step
+        logger.info("Before Step CVS import");
+
     }
 
     @Override
     public ExitStatus afterStep(StepExecution stepExecution) {
-        logger.info("After Step CSV Import");
+        //Une fois la Step exécutée
+        logger.info("After Step CVS import");
         logger.info(stepExecution.getSummary());
         return ExitStatus.COMPLETED;
     }

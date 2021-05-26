@@ -4,8 +4,10 @@ import javax.persistence.Column;
 import javax.persistence.Entity;
 import javax.persistence.Id;
 
+
 @Entity
 public class Commune {
+
     @Id
     @Column(length = 5)
     private String codeInsee;
@@ -16,9 +18,19 @@ public class Commune {
     private Double latitude;
     private Double longitude;
 
-    public Commune() {
+    @Override
+    public String toString() {
+        return "Commune{" +
+                "codeInsee='" + codeInsee + '\'' +
+                ", nom='" + nom + '\'' +
+                ", codePostal='" + codePostal + '\'' +
+                ", latitude=" + latitude +
+                ", longitude=" + longitude +
+                '}';
     }
 
+    public Commune() {
+    }
     public Commune(String codeInsee, String nom, String codePostal, Double latitude, Double longitude) {
         this.codeInsee = codeInsee;
         this.nom = nom;
@@ -66,17 +78,4 @@ public class Commune {
     public void setLongitude(Double longitude) {
         this.longitude = longitude;
     }
-
-    @Override
-    public String toString() {
-        final StringBuilder sb = new StringBuilder("Commune{");
-        sb.append("codeInsee='").append(codeInsee).append('\'');
-        sb.append(", nom='").append(nom).append('\'');
-        sb.append(", codePostal='").append(codePostal).append('\'');
-        sb.append(", latitude=").append(latitude);
-        sb.append(", longitude=").append(longitude);
-        sb.append('}');
-        return sb.toString();
-    }
 }
-

@@ -24,8 +24,10 @@ public class CommuneCSVItemProcessor implements ItemProcessor<CommuneCSV, Commun
         validateCommuneCSV(item);
         commune.setCodeInsee(item.getCodeInsee());
         commune.setCodePostal(item.getCodePostal());
+
         //Majuscule première lettre de chaque terme
         String nomCommune = WordUtils.capitalizeFully(item.getNom());
+
         //Proprification du nom
         nomCommune = nomCommune.replaceAll("^L ", "L'");
         nomCommune = nomCommune.replaceAll(" L ", " L'");
@@ -36,6 +38,7 @@ public class CommuneCSVItemProcessor implements ItemProcessor<CommuneCSV, Commun
         nomCommune = nomCommune.replaceAll("^Ste ", "Sainte ");
         nomCommune = nomCommune.replaceAll(" Sainte ", " Sainte ");
         commune.setNom(nomCommune);
+
         //Latitude/Longitude
         String[] coordonnees = item.getCoordonneesGps().split(",");
         if(coordonnees.length == 2){
@@ -44,7 +47,6 @@ public class CommuneCSVItemProcessor implements ItemProcessor<CommuneCSV, Commun
         }
         return commune;
     }
-
     private void validateCommuneCSV(CommuneCSV item) throws CommuneCSVException {
         //Contrôler Code INSEE 5 chiffres
         if(item.getCodeInsee() != null && !item.getCodeInsee().matches("^[0-9AB]{5}$")){
@@ -65,6 +67,8 @@ public class CommuneCSVItemProcessor implements ItemProcessor<CommuneCSV, Commun
             throw new CommuneCSVException("Les coordonnées GPS sont incorrectes ! " + item.getCoordonneesGps());
         }
     }
+
+
     Logger logger = LoggerFactory.getLogger(this.getClass());
 
     @AfterStep
