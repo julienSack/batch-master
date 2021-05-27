@@ -1,12 +1,24 @@
 package com.ipiecoles.batch.dto;
 
 public class CommuneCSV {
+    @Override
+    public String toString() {
+        return "CommuneCSV{" +
+                "codeInsee='" + codeInsee + '\'' +
+                ", nom='" + nom + '\'' +
+                ", codePostal='" + codePostal + '\'' +
+                ", ligne5='" + ligne5 + '\'' +
+                ", libelleAcheminement='" + libelleAcheminement + '\'' +
+                ", coordonnneesGps='" + coordonnneesGps + '\'' +
+                '}';
+    }
+
     private String codeInsee;
     private String nom;
     private String codePostal;
     private String ligne5;
     private String libelleAcheminement;
-    private String coordonneesGps;
+    private String coordonnneesGps;
 
     public String getCodeInsee() {
         return codeInsee;
@@ -49,23 +61,10 @@ public class CommuneCSV {
     }
 
     public String getCoordonneesGps() {
-        return coordonneesGps;
+        return coordonnneesGps;
     }
 
-    public void setCoordonneesGps(String coordonneesGps) {
-        this.coordonneesGps = coordonneesGps;
-    }
-
-    @Override
-    public String toString() {
-        final StringBuilder sb = new StringBuilder("CommuneCSV{");
-        sb.append("codeInsee='").append(codeInsee).append('\'');
-        sb.append(", nom='").append(nom).append('\'');
-        sb.append(", codePostal='").append(codePostal).append('\'');
-        sb.append(", ligne5='").append(ligne5).append('\'');
-        sb.append(", libelleAcheminement='").append(libelleAcheminement).append('\'');
-        sb.append(", coordonneesGps='").append(coordonneesGps).append('\'');
-        sb.append('}');
-        return sb.toString();
+    public void setCoordonnneesGps(String coordonnneesGps) {
+        this.coordonnneesGps = coordonnneesGps;
     }
 }

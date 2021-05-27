@@ -29,6 +29,7 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.retry.backoff.FixedBackOffPolicy;
 
+
 import javax.persistence.EntityManagerFactory;
 import javax.sql.DataSource;
 
@@ -43,95 +44,67 @@ public class CommunesImportBatch {
     public StepBuilderFactory stepBuilderFactory;
 
     @Autowired
-    private EntityManagerFactory entityManagerFactory;
+    public EntityManagerFactory entityManagerFactory;
 
-    @Value("${importFile.chunkSize}")
-    private Integer chunkSize;
-
+    // Job principal qui appel les steps définies après
     @Bean
-    public Step stepGetMissingCoordinates(){
-        FixedBackOffPolicy policy = new FixedBackOffPolicy();
-        policy.setBackOffPeriod(2000);
-        return stepBuilderFactory.get("getMissingCoordinates")
-                .<Commune, Commune> chunk(10)
-                .reader(communesMissingCoordinatesJpaItemReader())
-                .processor(communesMissingCoordinatesItemProcessor())
-                .writer(writerJPA2())
-                .faultTolerant()
-                .retryLimit(5)
-                .retry(NetworkException.class)
-                .backOffPolicy(policy)
+    public Job importCsvJob(Step stepStart, Step stepImportCSV, Step stepGetMissingCoordinates){
+        return jobBuilderFactory.get("importCsvJob")
+                .incrementer(new RunIdIncrementer())
+                .flow(stepStart)
+                .next(stepImportCSV)
+                .on("COMPLETED_WITH_MISSING_COORDINATES").to(stepGetMissingCoordinates)
+                .end().build();
+    }
+
+    //*************************************************//
+    // STEP 1 : Tasklet Message "Début du traitement" //
+    // ***********************************************//
+
+    // Tasklet
+    @Bean
+    public Tasklet startTasklet(){
+        return new StartTasklet();
+    }
+
+    // Step
+    @Bean
+    public Step stepStart() {
+        return stepBuilderFactory.get("stepStart")
+                .tasklet(startTasklet())
+                .listener(startTasklet())
                 .build();
     }
 
-    @Bean
-    public CommunesMissingCoordinatesItemProcessor communesMissingCoordinatesItemProcessor(){
-        return new CommunesMissingCoordinatesItemProcessor();
-    }
+    //*************************************//
+    // STEP 2 : traitement du fichier CSV //
+    //************************************//
 
+    // reader
     @Bean
-    public JpaPagingItemReader<Commune> communesMissingCoordinatesJpaItemReader(){
-        return new JpaPagingItemReaderBuilder<Commune>()
-                .name("communesMissingCoordinatesJpaItemReader")
-                .entityManagerFactory(entityManagerFactory)
-                .pageSize(10)
-                .queryString("from Commune c where c.latitude is null or c.longitude is null")
+    public FlatFileItemReader<CommuneCSV> communeCSVItemReader() {
+        return new FlatFileItemReaderBuilder<CommuneCSV>()
+                .name("communeCSVItemReader")
+                .linesToSkip(1)
+                .resource(new ClassPathResource("laposte_hexasmal.csv"))
+                .delimited()
+                .delimiter(";")
+                .names("codeInsee", "nom", "codePostal", "ligne5", "libelleAcheminement", "coordonneesGps")
+                .fieldSetMapper(new BeanWrapperFieldSetMapper<>() {{
+                    setTargetType(CommuneCSV.class);
+                }})
                 .build();
     }
 
+    // processor
     @Bean
-    public StepExecutionListener communeCSVImportStepListener(){
-        return new CommuneCSVImportStepListener();
+    public CommuneCSVItemProcessor communeCSVItemProcessor(){
+        return new CommuneCSVItemProcessor();
     }
 
-    @Bean
-    public ChunkListener communeCSVImportChunkListener(){
-        return new CommuneCSVImportChunkListener();
-    }
-
-    @Bean
-    public ItemReadListener<CommuneCSV> communeCSVItemReadListener(){
-        return new CommuneCSVItemListener();
-    }
-
-    @Bean
-    public ItemWriteListener<Commune> communeCSVItemWriteListener(){
-        return new CommuneCSVItemListener();
-    }
-
-    @Bean
-    public CommunesCSVImportSkipListener communesCSVImportSkipListener(){
-        return new CommunesCSVImportSkipListener();
-    }
-
-    @Bean
-    public Step stepImportCSV(){
-        return stepBuilderFactory.get("importFile")
-                .<CommuneCSV, Commune> chunk(chunkSize)
-                .reader(communesCSVItemReader())
-                .processor(communeCSVToCommuneProcessor())
-                .writer(writerJPA())
-                .faultTolerant()
-                .skipPolicy(new AlwaysSkipItemSkipPolicy())
-                .skip(CommuneCSVException.class)
-                .skip(FlatFileParseException.class)
-                .listener(communesCSVImportSkipListener())
-//                .listener(communeCSVImportStepListener())
-//                .listener(communeCSVImportChunkListener())
-//                .listener(communeCSVItemReadListener())
-                .listener(communeCSVItemWriteListener())
-                .listener(communeCSVToCommuneProcessor())
-                .build();
-    }
-
+    // writer
     @Bean
     public JpaItemWriter<Commune> writerJPA(){
-        return new JpaItemWriterBuilder<Commune>().entityManagerFactory(entityManagerFactory)
-                .build();
-    }
-
-    @Bean
-    public JpaItemWriter<Commune> writerJPA2(){
         return new JpaItemWriterBuilder<Commune>().entityManagerFactory(entityManagerFactory)
                 .build();
     }
@@ -146,47 +119,96 @@ public class CommunesImportBatch {
                 .dataSource(dataSource).build();
     }
 
+    // listener
     @Bean
-    public CommuneCSVItemProcessor communeCSVToCommuneProcessor(){
-        return new CommuneCSVItemProcessor();
+    public StepExecutionListener communeCSVImportStepListener(){
+        return new CommuneCSVImportStepListener();
     }
 
     @Bean
-    public FlatFileItemReader<CommuneCSV> communesCSVItemReader(){
-        return new FlatFileItemReaderBuilder<CommuneCSV>()
-                .name("communesCSVItemReader")
-                .linesToSkip(1)
-                .resource(new ClassPathResource("laposte_hexasmal_test_skip.csv"))
-//                .resource(new ClassPathResource("laposte_hexasmal.csv"))
-                .delimited()
-                .delimiter(";")
-                .names("codeInsee", "nom", "codePostal", "ligne5", "libelleAcheminement", "coordonneesGPS")
-                .fieldSetMapper(new BeanWrapperFieldSetMapper<>(){{
-                    setTargetType(CommuneCSV.class);
-                }})
+    public ChunkListener communeCSVImportChunkListener(){
+        return new CommuneCSVImportChunkListener();
+    }
+
+    @Bean
+    public ItemReadListener<CommuneCSV> communeCSVItemReadListener(){
+        return new CommuneCSVItemListener();
+    }
+    @Bean
+    public ItemWriteListener<Commune> communeCSVItemWriteListener(){
+        return new CommuneCSVItemListener();
+    }
+
+    @Bean
+    public CommunesCSVImportSkipListener communesCSVImportSkipListener(){
+        return new CommunesCSVImportSkipListener();
+    }
+
+    // step
+    @Value("${importFile.chunkSize}")
+    private Integer chunkSize;
+
+    @Bean
+    public Step stepImportCSV(){
+        return stepBuilderFactory.get("importFile")
+                .<CommuneCSV, Commune> chunk(chunkSize)
+                .reader(communeCSVItemReader())
+                .processor(communeCSVItemProcessor())
+                .writer(writerJPA())
+                //.writer(writerJDBC(null)) -- on utilise l'un ou l'autre
+                .faultTolerant()
+                .skipPolicy(new AlwaysSkipItemSkipPolicy())
+                .skip(CommuneCSVException.class)
+                .skip(FlatFileParseException.class)
+                .listener(communesCSVImportSkipListener())
+                //.listener(communeCSVImportStepListener())
+                //.listener(communeCSVImportChunkListener())
+                //.listener(communeCSVItemReadListener())
+                .listener(communeCSVItemWriteListener())
+                .listener(communeCSVItemProcessor())
                 .build();
     }
 
+
+    //******************************************************//
+    // STEP 3 : traitement pour les coordonnées manquantes //
+    //******************************************************//  
+
+    // processor
     @Bean
-    public Step stepHelloWorld(){
-        return stepBuilderFactory.get("stepHelloWorld")
-                .tasklet(helloWorldTasklet())
-                .listener(helloWorldTasklet())
+    public CommunesMissingCoordinatesItemProcessor communesMissingCoordinatesItemProcessor(){
+        return new CommunesMissingCoordinatesItemProcessor();
+    }
+
+    // reader
+    @Bean
+    public JpaPagingItemReader<Commune> communesMissingCoordinatesJpaItemReader() {
+        return new JpaPagingItemReaderBuilder<Commune>()
+                .name("communesMissingCoordinatesJpaItemReader")
+                .entityManagerFactory(entityManagerFactory)
+                .pageSize(10)
+                .queryString("from Commune c where c.latitude is null or c.longitude is null")
                 .build();
     }
 
+    // pour le writer on utilise l'existant writerJPA dans le step précédent
+
+    // Step
     @Bean
-    public Tasklet helloWorldTasklet(){
-        return new StartTasklet();
+    public Step stepGetMissingCoordinates(){
+        FixedBackOffPolicy policy = new FixedBackOffPolicy();
+        policy.setBackOffPeriod(2000);
+        return stepBuilderFactory.get("getMissingCoordinates")
+                .<Commune, Commune> chunk(10)
+                .reader(communesMissingCoordinatesJpaItemReader())
+                .processor(communesMissingCoordinatesItemProcessor())
+                .writer(writerJPA())
+                .faultTolerant()
+                .retryLimit(5)
+                .retry(NetworkException.class)
+                .backOffPolicy(policy)
+                .build();
     }
 
-    @Bean
-    public Job importCsvJob(Step stepHelloWorld, Step stepImportCSV, Step stepGetMissingCoordinates){
-        return jobBuilderFactory.get("importCsvJob")
-                .incrementer(new RunIdIncrementer())
-                .flow(stepHelloWorld)
-                .next(stepImportCSV)
-                .on("COMPLETED_WITH_MISSING_COORDINATES").to(stepGetMissingCoordinates)
-                .end().build();
-    }
+
 }
